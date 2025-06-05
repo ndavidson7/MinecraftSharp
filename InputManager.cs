@@ -8,7 +8,7 @@ namespace MinecraftSharp;
 internal class InputManager
 {
     private readonly IWindow _window;
-    private IKeyboard? _keyboard;
+    private readonly IKeyboard? _keyboard;
     private readonly Camera _camera;
     private Vector2 _lastMousePosition;
 

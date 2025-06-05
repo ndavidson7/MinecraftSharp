@@ -28,25 +28,13 @@ internal class ShaderProgram : IDisposable
         _handle = _gl.CreateProgram();
         _gl.AttachShader(_handle, vertexShaderId);
         _gl.AttachShader(_handle, fragmentShaderId);
+
         _gl.LinkProgram(_handle);
-
-        _gl.DetachShader(_handle, vertexShaderId);
-        _gl.DetachShader(_handle, fragmentShaderId);
-        _gl.DeleteShader(vertexShaderId);
-        _gl.DeleteShader(fragmentShaderId);
-
         _gl.GetProgram(_handle, ProgramPropertyARB.LinkStatus, out int code);
         if (code != (int) GLEnum.True)
         {
             string infoLog = _gl.GetProgramInfoLog(_handle);
             throw new Exception($"Shader program linking failed: {infoLog}");
-        }
-
-        _gl.GetProgram(_handle, ProgramPropertyARB.ValidateStatus, out code);
-        if (code == 0)
-        {
-            string infoLog = _gl.GetProgramInfoLog(_handle);
-            throw new Exception($"Shader program validation failed: {infoLog}");
         }
 
         _gl.GetProgram(_handle, ProgramPropertyARB.ActiveUniforms, out int numUniforms);
@@ -57,6 +45,11 @@ internal class ShaderProgram : IDisposable
             int location = _gl.GetUniformLocation(_handle, name);
             _uniformLocations.Add(name, location);
         }
+
+        _gl.DetachShader(_handle, vertexShaderId);
+        _gl.DetachShader(_handle, fragmentShaderId);
+        _gl.DeleteShader(vertexShaderId);
+        _gl.DeleteShader(fragmentShaderId);
     }
 
     public void Use() => _gl.UseProgram(_handle);
@@ -116,7 +109,7 @@ internal class ShaderProgram : IDisposable
         _gl.ShaderSource(shaderId, shaderSource);
         _gl.CompileShader(shaderId);
         _gl.GetShader(shaderId, ShaderParameterName.CompileStatus, out int success);
-        if (success == 0)
+        if (success == (int) GLEnum.False)
         {
             string infoLog = _gl.GetShaderInfoLog(shaderId);
             throw new Exception($"Shader compilation failed: {infoLog}");

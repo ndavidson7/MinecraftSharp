@@ -44,7 +44,12 @@ internal class Game : IDisposable
         _window.FocusChanged += isFocused => _isWindowFocused = isFocused;   
     }
 
-    public void Run() => _window.Run();
+    public void Run()
+    {
+        _window.Run();
+
+        _window.Dispose();
+    }
 
     private void OnLoad()
     {
@@ -54,7 +59,7 @@ internal class Game : IDisposable
         _gl.Enable(GLEnum.DepthTest);
 
         float[] vertices =
-        {
+        [
             // positions            normals
             -0.5f, -0.5f, -0.5f,    0.0f,  0.0f, -1.0f,
             0.5f, -0.5f, -0.5f,     0.0f,  0.0f, -1.0f,
@@ -85,10 +90,10 @@ internal class Game : IDisposable
             0.5f,  0.5f, -0.5f,     0.0f,  1.0f,  0.0f,
             0.5f,  0.5f,  0.5f,     0.0f,  1.0f,  0.0f,
             -0.5f,  0.5f,  0.5f,    0.0f,  1.0f,  0.0f,
-        };
+        ];
 
         uint[] indices =
-        {
+        [
             0, 1, 2,
             2, 3, 0,
 
@@ -106,11 +111,25 @@ internal class Game : IDisposable
 
             20, 21, 22,
             22, 23, 20,
-        };
+        ];
+
+
+        BufferObject<float> vbo = new(_gl, BufferTargetARB.ArrayBuffer, BufferUsageARB.StaticDraw, vertices);
+        BufferObject<uint> ebo = new(_gl, BufferTargetARB.ElementArrayBuffer, BufferUsageARB.StaticDraw, indices);
+
+        _blockVao = new(_gl, vbo, ebo);
+        _blockVao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 6, 0);
+        _blockVao.AddVertexAttribute(1, 3, VertexAttribPointerType.Float, false, 6, 3);
+
+        _lightVao = new(_gl, vbo, ebo);
+        _lightVao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 6, 0);
+
+        _camera = new(new(0, 0, 5), _window.Size.X / (float)_window.Size.Y);
+        _inputManager = new(_window.CreateInput(), _window, _camera!);
 
         //_blockShader = new(_gl, File.ReadAllText("Content\\simple_block_shader_vertex.glsl"), File.ReadAllText("Content\\simple_block_shader_fragment.glsl"));
-        _blockShader = new(_gl, File.ReadAllText("Content\\simple_block_shader_vertex.glsl"), """
-            #version 330 core
+        _blockShader = new(_gl, File.ReadAllText(Path.Combine("Content", "simple_block_shader_vertex.glsl")), """
+            #version 410 core
             in vec3 fragPosition;
             in vec3 worldNormal;
 
@@ -143,7 +162,7 @@ internal class Game : IDisposable
             }
             """);
         _lightShader = new(_gl, """
-            #version 460 core
+            #version 410 core
 
             layout (location = 0) in vec3 position;
 
@@ -155,7 +174,7 @@ internal class Game : IDisposable
             }
             """,
             """
-            #version 460 core
+            #version 410 core
 
             out vec4 fragColor;
 
@@ -166,20 +185,7 @@ internal class Game : IDisposable
                 fragColor = color;
             }
             """);
-
-        BufferObject<float> vbo = new(_gl, BufferTargetARB.ArrayBuffer, BufferUsageARB.StaticDraw, vertices);
-        BufferObject<uint> ebo = new(_gl, BufferTargetARB.ElementArrayBuffer, BufferUsageARB.StaticDraw, indices);
-
-        _blockVao = new(_gl, vbo, ebo);
-        _blockVao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 6, 0);
-        _blockVao.AddVertexAttribute(1, 3, VertexAttribPointerType.Float, false, 6, 3);
-
-        _lightVao = new(_gl, vbo, ebo);
-        _lightVao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 6, 0);
-
-        _camera = new(new(0, 0, 5), _window.Size.X / (float)_window.Size.Y);
-        _inputManager = new(_window.CreateInput(), _window, _camera!);
-
+        
         _window.Center();
         _window.IsVisible = true;
     }
@@ -262,6 +268,5 @@ internal class Game : IDisposable
         _lightVao?.Dispose();
         _blockShader?.Dispose();
         _lightShader?.Dispose();
-        _window.Dispose();
     }
 }
