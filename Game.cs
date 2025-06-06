@@ -18,20 +18,18 @@ internal class Game : IDisposable
 
     private ShaderProgram? _blockShader;
     private VertexArrayObject<float, uint>? _blockVao;
-    // private Color _blockAmbient = Color.FromArgb(255, 255, 128, 79);
-    // private Color _blockDiffuse = Color.FromArgb(255, 255, 128, 79);
-    // private Color _blockSpecular = Color.FromArgb(255, 128, 128, 128);
-    // private float _blockShininess = 32;
-    private Color _blockColor = Color.Green;
+    private Texture2D? _blockDiffuseMap;
+    private Texture2D? _blockSpecularMap;
+    private float _blockShininess = 32;
     
-    private ShaderProgram? _lightShader;
-    private VertexArrayObject<float, uint>? _lightVao;
-    // private Color _lightAmbient = Color.FromArgb(255, 51, 51, 51);
-    // private Color _lightDiffuse = Color.FromArgb(255, 128, 128, 128);
-    // private Color _lightSpecular = Color.LightYellow;
-    private Color _lightColor = Color.Yellow;
-    private readonly Vector4 _lightOrbit = new(3, 3, 3, 1);
-
+    private ShaderProgram? _sunShader;
+    private VertexArrayObject<float, uint>? _sunVao;
+    private Vector3 _sunOrbit = new(10, 10, 0);
+    private float _sunOrbitSpeed = 0.2f;
+    private Color _sunAmbient = Color.FromArgb(255, 51, 51, 51);
+    private Color _sunDiffuse = Color.FromArgb(255, 128, 128, 128);
+    private Color _sunSpecular = Color.FromArgb(255, 255, 255, 255);
+    
     private Color _backgroundColor = Color.Black;
 
     public Game(WindowOptions options)
@@ -62,128 +60,78 @@ internal class Game : IDisposable
 
         float[] vertices =
         [
-            // positions            normals
-            -0.5f, -0.5f, -0.5f,    0.0f,  0.0f, -1.0f,
-            0.5f, -0.5f, -0.5f,     0.0f,  0.0f, -1.0f,
-            0.5f,  0.5f, -0.5f,     0.0f,  0.0f, -1.0f,
-            -0.5f,  0.5f, -0.5f,    0.0f,  0.0f, -1.0f,
+            // positions            // normals  // texture coords
+            // Front face (+Z)
+            -0.5f, -0.5f,  0.5f,    0, 0, 1,    0.0f, 0.0f, // 0
+             0.5f, -0.5f,  0.5f,    0, 0, 1,    1.0f, 0.0f, // 1
+             0.5f,  0.5f,  0.5f,    0, 0, 1,    1.0f, 1.0f, // 2
+            -0.5f,  0.5f,  0.5f,    0, 0, 1,    0.0f, 1.0f, // 3
 
-            -0.5f, -0.5f,  0.5f,    0.0f,  0.0f,  1.0f,
-            0.5f, -0.5f,  0.5f,     0.0f,  0.0f,  1.0f,
-            0.5f,  0.5f,  0.5f,     0.0f,  0.0f,  1.0f,
-            -0.5f,  0.5f,  0.5f,    0.0f,  0.0f,  1.0f,
+            // Back face (-Z)
+             0.5f, -0.5f, -0.5f,    0, 0, -1,   0.0f, 0.0f, // 4
+            -0.5f, -0.5f, -0.5f,    0, 0, -1,   1.0f, 0.0f, // 5
+            -0.5f,  0.5f, -0.5f,    0, 0, -1,   1.0f, 1.0f, // 6
+             0.5f,  0.5f, -0.5f,    0, 0, -1,   0.0f, 1.0f, // 7
 
-            -0.5f,  0.5f,  0.5f,    -1.0f,  0.0f,  0.0f,
-            -0.5f,  0.5f, -0.5f,    -1.0f,  0.0f,  0.0f,
-            -0.5f, -0.5f, -0.5f,    -1.0f,  0.0f,  0.0f,
-            -0.5f, -0.5f,  0.5f,    -1.0f,  0.0f,  0.0f,
+            // Left face (-X)
+            -0.5f, -0.5f, -0.5f,    -1, 0, 0,   0.0f, 0.0f, // 8
+            -0.5f, -0.5f,  0.5f,    -1, 0, 0,   1.0f, 0.0f, // 9
+            -0.5f,  0.5f,  0.5f,    -1, 0, 0,   1.0f, 1.0f, // 10
+            -0.5f,  0.5f, -0.5f,    -1, 0, 0,   0.0f, 1.0f, // 11
 
-            0.5f,  0.5f,  0.5f,     1.0f,  0.0f,  0.0f,
-            0.5f,  0.5f, -0.5f,     1.0f,  0.0f,  0.0f,
-            0.5f, -0.5f, -0.5f,     1.0f,  0.0f,  0.0f,
-            0.5f, -0.5f,  0.5f,     1.0f,  0.0f,  0.0f,
+            // Right face (+X)
+             0.5f, -0.5f,  0.5f,    1, 0, 0,    0.0f, 0.0f, // 12
+             0.5f, -0.5f, -0.5f,    1, 0, 0,    1.0f, 0.0f, // 13
+             0.5f,  0.5f, -0.5f,    1, 0, 0,    1.0f, 1.0f, // 14
+             0.5f,  0.5f,  0.5f,    1, 0, 0,    0.0f, 1.0f, // 15
 
-            -0.5f, -0.5f, -0.5f,    0.0f, -1.0f,  0.0f,
-            0.5f, -0.5f, -0.5f,     0.0f, -1.0f,  0.0f,
-            0.5f, -0.5f,  0.5f,     0.0f, -1.0f,  0.0f,
-            -0.5f, -0.5f,  0.5f,    0.0f, -1.0f,  0.0f,
+            // Top face (+Y)
+            -0.5f,  0.5f,  0.5f,    0, 1, 0,    0.0f, 0.0f, // 16
+             0.5f,  0.5f,  0.5f,    0, 1, 0,    1.0f, 0.0f, // 17
+             0.5f,  0.5f, -0.5f,    0, 1, 0,    1.0f, 1.0f, // 18
+            -0.5f,  0.5f, -0.5f,    0, 1, 0,    0.0f, 1.0f, // 19
 
-            -0.5f,  0.5f, -0.5f,    0.0f,  1.0f,  0.0f,
-            0.5f,  0.5f, -0.5f,     0.0f,  1.0f,  0.0f,
-            0.5f,  0.5f,  0.5f,     0.0f,  1.0f,  0.0f,
-            -0.5f,  0.5f,  0.5f,    0.0f,  1.0f,  0.0f,
+            // Bottom face (-Y)
+            -0.5f, -0.5f, -0.5f,    0, -1, 0,   0.0f, 0.0f, // 20
+             0.5f, -0.5f, -0.5f,    0, -1, 0,   1.0f, 0.0f, // 21
+             0.5f, -0.5f,  0.5f,    0, -1, 0,   1.0f, 1.0f, // 22
+            -0.5f, -0.5f,  0.5f,    0, -1, 0,   0.0f, 1.0f, // 23
         ];
 
         uint[] indices =
         [
-            0, 1, 2,
-            2, 3, 0,
-
-            4, 5, 6,
-            6, 7, 4,
-
-            8, 9, 10,
-            10, 11, 8,
-
-            12, 13, 14,
-            14, 15, 12,
-
-            16, 17, 18,
-            18, 19, 16,
-
-            20, 21, 22,
-            22, 23, 20,
+            // Front face
+            0, 1, 2, 2, 3, 0,
+            // Back face
+            4, 5, 6, 6, 7, 4,
+            // Left face
+            8, 9, 10, 10, 11, 8,
+            // Right face
+            12, 13, 14, 14, 15, 12,
+            // Top face
+            16, 17, 18, 18, 19, 16,
+            // Bottom face
+            20, 21, 22, 22, 23, 20
         ];
         
         BufferObject<float> vbo = new(_gl, BufferTargetARB.ArrayBuffer, BufferUsageARB.StaticDraw, vertices);
         BufferObject<uint> ebo = new(_gl, BufferTargetARB.ElementArrayBuffer, BufferUsageARB.StaticDraw, indices);
 
         _blockVao = new(_gl, vbo, ebo);
-        _blockVao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 6, 0);
-        _blockVao.AddVertexAttribute(1, 3, VertexAttribPointerType.Float, false, 6, 3);
+        _blockVao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 8, 0); // positions
+        _blockVao.AddVertexAttribute(1, 3, VertexAttribPointerType.Float, false, 8, 3); // normals
+        _blockVao.AddVertexAttribute(2, 2, VertexAttribPointerType.Float, false, 8, 6); // texture coords
+        _blockDiffuseMap = new(_gl, Path.Combine("Content", "Textures", "container2.png"));
+        _blockSpecularMap = new(_gl, Path.Combine("Content", "Textures", "container2_specular.png"), TextureUnit.Texture1);
 
-        _lightVao = new(_gl, vbo, ebo);
-        _lightVao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 6, 0);
+        _sunVao = new(_gl, vbo, ebo);
+        _sunVao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 8, 0); // positions
 
         _camera = new(new(0, 0, 5), _window.Size.X / (float)_window.Size.Y);
         _inputManager = new(_window.CreateInput(), _window, _camera!);
 
-        //_blockShader = new(_gl, File.ReadAllText("Content\\simple_block_shader_vertex.glsl"), File.ReadAllText("Content\\simple_block_shader_fragment.glsl"));
-        _blockShader = new(_gl, File.ReadAllText(Path.Combine("Content", "simple_block_shader_vertex.glsl")), """
-            #version 410 core
-            in vec3 fragPosition;
-            in vec3 worldNormal;
-
-            uniform vec4 objectColor;
-            uniform vec4 lightColor;
-            uniform vec3 lightPosition;
-            uniform vec3 viewPosition;
-
-            out vec4 FragColor;
-
-            void main()
-            {
-                  float ambientStrength = 0.1;
-                  vec4 ambient = ambientStrength * lightColor;
-
-                  vec3 lightDirection = normalize(lightPosition - fragPosition);
-                  float diff = max(dot(worldNormal, lightDirection), 0.0);
-                  vec4 diffuse = diff * lightColor;
-
-                  float specularStrength = 0.5;
-                  vec3 viewDirection = normalize(viewPosition - fragPosition);
-                  vec3 reflectDirection = reflect(-lightDirection, worldNormal);
-                  float spec = pow(max(dot(viewDirection, reflectDirection), 0.0), 32);
-                  vec4 specular = specularStrength * spec * lightColor;
-
-                  //The resulting colour should be the amount of ambient colour + the amount of additional colour provided by the diffuse of the lamp + the specular amount
-                  FragColor = (ambient + diffuse + specular) * objectColor;
-            }
-            """);
-        _lightShader = new(_gl, """
-            #version 410 core
-
-            layout (location = 0) in vec3 position;
-
-            uniform mat4 mvpMatrix;
-
-            void main()
-            {
-                gl_Position = mvpMatrix * vec4(position, 1.0);
-            }
-            """,
-            """
-            #version 410 core
-
-            out vec4 fragColor;
-
-            uniform vec4 color;
-
-            void main()
-            {
-                fragColor = color;
-            }
-            """);
+        _blockShader = new(_gl, File.ReadAllText(Path.Combine("Content", "simple_block_shader_vertex.glsl")), File.ReadAllText(Path.Combine("Content", "simple_block_shader_fragment.glsl")));
+        _sunShader = new(_gl, File.ReadAllText(Path.Combine("Content", "simple_sun_shader_vertex.glsl")), File.ReadAllText(Path.Combine("Content", "simple_sun_shader_fragment.glsl")));
         
         _window.Center();
         _window.IsVisible = true;
@@ -195,21 +143,25 @@ internal class Game : IDisposable
 
         float totalElapsedSeconds = (float)_window.Time;
 
-        // get uniforms for light source
-        float lightX = _lightOrbit.X * MathF.Sin(totalElapsedSeconds);
-        float lightY = _lightOrbit.Y * -MathF.Sin(totalElapsedSeconds);
-        float lightZ = _lightOrbit.Z * MathF.Cos(totalElapsedSeconds);
-        Vector3 lightPosition = new(lightX, lightY, lightZ);
-        Matrix4x4 lightModel = Matrix4x4.CreateScale(0.5f) * Matrix4x4.CreateTranslation(lightPosition);
         Matrix4x4 view = _camera!.ViewMatrix;
         Matrix4x4 projection = _camera!.ProjectionMatrix;
-        Matrix4x4 lightMvp = lightModel * view * projection;
 
-        // draw light source
-        _lightShader!.Use();
-        _lightShader.SetUniform("mvpMatrix", lightMvp);
-        _lightShader.SetUniform("color", _lightColor);
-        _lightVao!.Draw();
+        // get uniforms for sun
+        float sunAngle = totalElapsedSeconds * _sunOrbitSpeed;
+        Vector3 sunPosition = new(
+            _sunOrbit.X * MathF.Sin(sunAngle), // X: east-west
+            _sunOrbit.Y * MathF.Cos(sunAngle), // Y: height in sky
+            0f                                 // Z: no tilt
+        );
+        Vector3 sunDirection = Vector3.Normalize(-sunPosition);
+        Matrix4x4 sunModel = Matrix4x4.CreateScale(0.5f) * Matrix4x4.CreateTranslation(sunPosition);
+        Matrix4x4 sunMvp = sunModel * view * projection;
+
+        // draw sun
+        _sunShader!.Use();
+        _sunShader.SetUniform("mvpMatrix", sunMvp);
+        _sunShader.SetUniform("color", _sunSpecular);
+        _sunVao!.Draw();
 
         // get uniforms for block
         Matrix4x4 blockModel = Matrix4x4.Identity;
@@ -219,25 +171,19 @@ internal class Game : IDisposable
         //transInvModel2 = Matrix4x4.Transpose(transInvModel2);
 
         // draw block
+        _blockDiffuseMap!.Use();
+        _blockSpecularMap!.Use();
         _blockShader!.Use();
-        //_blockShader.SetUniform("modelMatrix", model);
-        //_blockShader.SetUniform("transInvModelMatrix", transInvModel);
-        //_blockShader.SetUniform("mvpMatrix", mvp);
-        //_blockShader.SetUniform("material.ambient", _blockAmbient);
-        //_blockShader.SetUniform("material.diffuse", _blockDiffuse);
-        //_blockShader.SetUniform("material.specular", _blockSpecular);
-        //_blockShader.SetUniform("material.shininess", _blockShininess);
-        //_blockShader.SetUniform("light.position", lightPosition);
-        //_blockShader.SetUniform("light.ambient", _lightAmbient);
-        //_blockShader.SetUniform("light.diffuse", _lightDiffuse);
-        //_blockShader.SetUniform("light.specular", _lightSpecular);
-        //_blockShader.SetUniform("viewPosition", _camera.Position);
         _blockShader.SetUniform("modelMatrix", blockModel);
         _blockShader.SetUniform("transInvModelMatrix", transInvModel);
         _blockShader.SetUniform("mvpMatrix", blockMvp);
-        _blockShader.SetUniform("objectColor", _blockColor);
-        _blockShader.SetUniform("lightColor", _lightColor);
-        _blockShader.SetUniform("lightPosition", lightPosition);
+        _blockShader.SetUniform("material.diffuse", 0); // texture slot 0
+        _blockShader.SetUniform("material.specular", 1); // texture slot 1
+        _blockShader.SetUniform("material.shininess", _blockShininess);
+        _blockShader.SetUniform("sun.direction", sunDirection);
+        _blockShader.SetUniform("sun.ambient", _sunAmbient);
+        _blockShader.SetUniform("sun.diffuse", _sunDiffuse);
+        _blockShader.SetUniform("sun.specular", _sunSpecular);
         _blockShader.SetUniform("viewPosition", _camera.Position);
         _blockVao!.Draw();
     }
@@ -261,8 +207,8 @@ internal class Game : IDisposable
     public void Dispose()
     {
         _blockVao?.Dispose();
-        _lightVao?.Dispose();
+        _sunVao?.Dispose();
         _blockShader?.Dispose();
-        _lightShader?.Dispose();
+        _sunShader?.Dispose();
     }
 }

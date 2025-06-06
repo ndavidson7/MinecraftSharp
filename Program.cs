@@ -19,6 +19,7 @@ internal class Program
 #endif
             IsVisible = false,
             FramesPerSecond = 60,
+            VSync = false,
         };
 
         using Game game = new(options);
