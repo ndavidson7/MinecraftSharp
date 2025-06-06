@@ -14,14 +14,16 @@ internal class InputManager
 
     public InputManager(IInputContext input, IWindow window, Camera camera)
     {
-        _keyboard = input.Keyboards.FirstOrDefault();
-        if (_keyboard is not null)
+        if (input.Keyboards.Count > 0)
+        {
+            _keyboard = input.Keyboards[0];
             _keyboard.KeyDown += OnKeyDown;
+        }
 
         _camera = camera;
         _window = window;
 
-        foreach (var mouse in input.Mice)
+        foreach (IMouse mouse in input.Mice)
         {
             mouse.Cursor.IsConfined = true;
             mouse.Cursor.CursorMode = CursorMode.Raw;
@@ -32,20 +34,23 @@ internal class InputManager
 
     public void OnUpdate(float deltaTime)
     {
-        //if (input.IsKeyDown(Keys.LeftShift))
+        if (_keyboard is null)
+            return;
 
-        if (_keyboard!.IsKeyPressed(Key.W))
-            _camera.Position += _camera.Front * _camera.Speed * deltaTime; // Forward
-        if (_keyboard.IsKeyPressed(Key.S))
-            _camera.Position -= _camera.Front * _camera.Speed * deltaTime; // Backward
-        if (_keyboard.IsKeyPressed(Key.A))
-            _camera.Position -= _camera.Right * _camera.Speed * deltaTime; // Left
-        if (_keyboard.IsKeyPressed(Key.D))
-            _camera.Position += _camera.Right * _camera.Speed * deltaTime; // Right
-        if (_keyboard.IsKeyPressed(Key.Space))
-            _camera.Position += _camera.Up * _camera.Speed * deltaTime; // Up
-        if (_keyboard.IsKeyPressed(Key.ControlLeft))
-            _camera.Position -= _camera.Up * _camera.Speed * deltaTime; // Down
+        Vector3 direction = default;
+        if (_keyboard.IsKeyPressed(Key.W))              direction += _camera.Front; // Forward
+        if (_keyboard.IsKeyPressed(Key.S))              direction -= _camera.Front; // Backward
+        if (_keyboard.IsKeyPressed(Key.A))              direction -= _camera.Right; // Left
+        if (_keyboard.IsKeyPressed(Key.D))              direction += _camera.Right; // Right
+        if (_keyboard.IsKeyPressed(Key.Space))          direction += _camera.Up;    // Up
+        if (_keyboard.IsKeyPressed(Key.ControlLeft))    direction -= _camera.Up;    // Down
+
+        float speed = _camera.Speed;
+        if (_keyboard.IsKeyPressed(Key.ShiftLeft))
+            speed *= 2f;
+        
+        if (direction != default)
+            _camera.Position += Vector3.Normalize(direction) * speed * deltaTime;
     }
 
     private void OnMouseMove(IMouse mouse, Vector2 position)
@@ -59,13 +64,13 @@ internal class InputManager
         Vector2 delta = position - _lastMousePosition;
         _lastMousePosition = position;
 
-        _camera.Yaw += delta.X * _camera.Sensitivity;
-        _camera.Pitch -= delta.Y * _camera.Sensitivity;
+        _camera.Yaw += Angle<float>.FromDegrees(delta.X * _camera.Sensitivity);
+        _camera.Pitch -= Angle<float>.FromDegrees(delta.Y * _camera.Sensitivity);
     }
 
     private void OnMouseWheel(IMouse mouse, ScrollWheel scrollWheel)
     {
-        _camera.FieldOfView -= scrollWheel.Y;
+        _camera.FieldOfView -= Angle<float>.FromDegrees(scrollWheel.Y);
     }
 
     /// <summary>

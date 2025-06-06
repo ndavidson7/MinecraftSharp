@@ -18,16 +18,18 @@ internal class Game : IDisposable
 
     private ShaderProgram? _blockShader;
     private VertexArrayObject<float, uint>? _blockVao;
-    private Color _blockAmbient = Color.FromArgb(255, 255, 128, 79);
-    private Color _blockDiffuse = Color.FromArgb(255, 255, 128, 79);
-    private Color _blockSpecular = Color.FromArgb(255, 128, 128, 128);
-    private float _blockShininess = 32;
-
+    // private Color _blockAmbient = Color.FromArgb(255, 255, 128, 79);
+    // private Color _blockDiffuse = Color.FromArgb(255, 255, 128, 79);
+    // private Color _blockSpecular = Color.FromArgb(255, 128, 128, 128);
+    // private float _blockShininess = 32;
+    private Color _blockColor = Color.Green;
+    
     private ShaderProgram? _lightShader;
     private VertexArrayObject<float, uint>? _lightVao;
-    private Color _lightAmbient = Color.FromArgb(255, 51, 51, 51);
-    private Color _lightDiffuse = Color.FromArgb(255, 128, 128, 128);
-    private Color _lightSpecular = Color.FromArgb(255, 255, 255, 255);
+    // private Color _lightAmbient = Color.FromArgb(255, 51, 51, 51);
+    // private Color _lightDiffuse = Color.FromArgb(255, 128, 128, 128);
+    // private Color _lightSpecular = Color.LightYellow;
+    private Color _lightColor = Color.Yellow;
     private readonly Vector4 _lightOrbit = new(3, 3, 3, 1);
 
     private Color _backgroundColor = Color.Black;
@@ -41,7 +43,7 @@ internal class Game : IDisposable
         _window.Render += OnRender;
         _window.FramebufferResize += OnFramebufferResize;
         _window.Closing += OnClose;
-        _window.FocusChanged += isFocused => _isWindowFocused = isFocused;   
+        _window.FocusChanged += isFocused => _isWindowFocused = isFocused;
     }
 
     public void Run()
@@ -56,7 +58,7 @@ internal class Game : IDisposable
         _gl = _window.CreateOpenGL();
 
         _gl.ClearColor(_backgroundColor);
-        _gl.Enable(GLEnum.DepthTest);
+        _gl.Enable(EnableCap.DepthTest);
 
         float[] vertices =
         [
@@ -112,8 +114,7 @@ internal class Game : IDisposable
             20, 21, 22,
             22, 23, 20,
         ];
-
-
+        
         BufferObject<float> vbo = new(_gl, BufferTargetARB.ArrayBuffer, BufferUsageARB.StaticDraw, vertices);
         BufferObject<uint> ebo = new(_gl, BufferTargetARB.ElementArrayBuffer, BufferUsageARB.StaticDraw, indices);
 
@@ -133,8 +134,8 @@ internal class Game : IDisposable
             in vec3 fragPosition;
             in vec3 worldNormal;
 
-            uniform vec3 objectColor;
-            uniform vec3 lightColor;
+            uniform vec4 objectColor;
+            uniform vec4 lightColor;
             uniform vec3 lightPosition;
             uniform vec3 viewPosition;
 
@@ -143,22 +144,20 @@ internal class Game : IDisposable
             void main()
             {
                   float ambientStrength = 0.1;
-                  vec3 ambient = ambientStrength * lightColor;
+                  vec4 ambient = ambientStrength * lightColor;
 
                   vec3 lightDirection = normalize(lightPosition - fragPosition);
                   float diff = max(dot(worldNormal, lightDirection), 0.0);
-                  vec3 diffuse = diff * lightColor;
+                  vec4 diffuse = diff * lightColor;
 
                   float specularStrength = 0.5;
                   vec3 viewDirection = normalize(viewPosition - fragPosition);
                   vec3 reflectDirection = reflect(-lightDirection, worldNormal);
                   float spec = pow(max(dot(viewDirection, reflectDirection), 0.0), 32);
-                  vec3 specular = specularStrength * spec * lightColor;
+                  vec4 specular = specularStrength * spec * lightColor;
 
                   //The resulting colour should be the amount of ambient colour + the amount of additional colour provided by the diffuse of the lamp + the specular amount
-                  vec3 result = (ambient + diffuse + specular) * objectColor;
-
-                  FragColor = vec4(result, 1.0);
+                  FragColor = (ambient + diffuse + specular) * objectColor;
             }
             """);
         _lightShader = new(_gl, """
@@ -201,24 +200,23 @@ internal class Game : IDisposable
         float lightY = _lightOrbit.Y * -MathF.Sin(totalElapsedSeconds);
         float lightZ = _lightOrbit.Z * MathF.Cos(totalElapsedSeconds);
         Vector3 lightPosition = new(lightX, lightY, lightZ);
-        Matrix4x4 model = Matrix4x4.CreateScale(0.5f) * Matrix4x4.CreateTranslation(lightPosition);
-        Matrix4x4 view = _camera!.GetViewMatrix();
-        Matrix4x4 projection = _camera!.GetProjectionMatrix();
-        Matrix4x4 mvp = model * view * projection;
+        Matrix4x4 lightModel = Matrix4x4.CreateScale(0.5f) * Matrix4x4.CreateTranslation(lightPosition);
+        Matrix4x4 view = _camera!.ViewMatrix;
+        Matrix4x4 projection = _camera!.ProjectionMatrix;
+        Matrix4x4 lightMvp = lightModel * view * projection;
 
         // draw light source
         _lightShader!.Use();
-        _lightShader.SetUniform("mvpMatrix", mvp);
-        _lightShader.SetUniform("color", _lightSpecular);
+        _lightShader.SetUniform("mvpMatrix", lightMvp);
+        _lightShader.SetUniform("color", _lightColor);
         _lightVao!.Draw();
 
         // get uniforms for block
-        model = Matrix4x4.Identity;
-        //model = Matrix4.CreateTranslation(1, 0, 0);
-        mvp = model * view * projection;
-        Matrix4x4.Invert(Matrix4x4.Transpose(model), out Matrix4x4 transInvModel);
-        //Matrix4x4.Invert(model, out Matrix4x4 transInvModel);
-        //transInvModel = Matrix4x4.Transpose(transInvModel);
+        Matrix4x4 blockModel = Matrix4x4.Identity;
+        Matrix4x4 blockMvp = blockModel * view * projection;
+        Matrix4x4.Invert(Matrix4x4.Transpose(blockModel), out Matrix4x4 transInvModel);
+        //Matrix4x4.Invert(blockModel, out Matrix4x4 transInvModel2);
+        //transInvModel2 = Matrix4x4.Transpose(transInvModel2);
 
         // draw block
         _blockShader!.Use();
@@ -234,16 +232,14 @@ internal class Game : IDisposable
         //_blockShader.SetUniform("light.diffuse", _lightDiffuse);
         //_blockShader.SetUniform("light.specular", _lightSpecular);
         //_blockShader.SetUniform("viewPosition", _camera.Position);
-        _blockShader.SetUniform("modelMatrix", model);
+        _blockShader.SetUniform("modelMatrix", blockModel);
         _blockShader.SetUniform("transInvModelMatrix", transInvModel);
-        _blockShader.SetUniform("mvpMatrix", mvp);
-        _blockShader.SetUniform("objectColor", new Vector3(1, 0, 0));
-        _blockShader.SetUniform("lightColor", new Vector3(0, 0, 0));
+        _blockShader.SetUniform("mvpMatrix", blockMvp);
+        _blockShader.SetUniform("objectColor", _blockColor);
+        _blockShader.SetUniform("lightColor", _lightColor);
         _blockShader.SetUniform("lightPosition", lightPosition);
         _blockShader.SetUniform("viewPosition", _camera.Position);
         _blockVao!.Draw();
-
-        //SwapBuffers();
     }
 
     private void OnUpdate(double deltaTime)

@@ -91,7 +91,7 @@ internal class ShaderProgram : IDisposable
                 _gl.Uniform4(location, v);
                 break;
             case Color c:
-                _gl.Uniform4(location, c.R, c.G, c.B, c.A);
+                _gl.Uniform4(location, c.R / 255f, c.G / 255f, c.B / 255f, c.A / 255f);
                 break;
             //case Matrix3X3 m:
             //    _gl.UniformMatrix3(location, false, ref m);
