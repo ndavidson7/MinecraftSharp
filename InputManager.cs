@@ -42,8 +42,8 @@ internal class InputManager
         if (_keyboard.IsKeyPressed(Key.S))              direction -= _camera.Front; // Backward
         if (_keyboard.IsKeyPressed(Key.A))              direction -= _camera.Right; // Left
         if (_keyboard.IsKeyPressed(Key.D))              direction += _camera.Right; // Right
-        if (_keyboard.IsKeyPressed(Key.Space))          direction += _camera.Up;    // Up
-        if (_keyboard.IsKeyPressed(Key.ControlLeft))    direction -= _camera.Up;    // Down
+        if (_keyboard.IsKeyPressed(Key.Space))          direction += Vector3.UnitY;    // Up
+        if (_keyboard.IsKeyPressed(Key.ControlLeft))    direction -= Vector3.UnitY;    // Down
 
         float speed = _camera.Speed;
         if (_keyboard.IsKeyPressed(Key.ShiftLeft))
