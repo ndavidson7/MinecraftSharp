@@ -38,10 +38,24 @@ internal class InputManager
             return;
 
         Vector3 direction = default;
-        if (_keyboard.IsKeyPressed(Key.W))              direction += _camera.Front; // Forward
-        if (_keyboard.IsKeyPressed(Key.S))              direction -= _camera.Front; // Backward
-        if (_keyboard.IsKeyPressed(Key.A))              direction -= _camera.Right; // Left
-        if (_keyboard.IsKeyPressed(Key.D))              direction += _camera.Right; // Right
+        if (_keyboard.IsKeyPressed(Key.W) || _keyboard.IsKeyPressed(Key.S))
+        {
+            // Project the camera's front vector onto the XZ plane (Y=0) and normalize
+            Vector3 forward = Vector3.Normalize(new(_camera.Front.X, 0, _camera.Front.Z));
+            if (_keyboard.IsKeyPressed(Key.W))
+                direction += forward;
+            if (_keyboard.IsKeyPressed(Key.S))
+                direction -= forward;
+        }
+        if (_keyboard.IsKeyPressed(Key.A) || _keyboard.IsKeyPressed(Key.D))
+        {
+            // Project the camera's right vector onto the XZ plane (Y=0) and normalize
+            Vector3 right = Vector3.Normalize(new(_camera.Right.X, 0, _camera.Right.Z));
+            if (_keyboard.IsKeyPressed(Key.A))
+                direction -= right;
+            if (_keyboard.IsKeyPressed(Key.D))
+                direction += right;
+        }
         if (_keyboard.IsKeyPressed(Key.Space))          direction += Vector3.UnitY;    // Up
         if (_keyboard.IsKeyPressed(Key.ControlLeft))    direction -= Vector3.UnitY;    // Down
 
