@@ -1,7 +1,9 @@
-﻿using MinecraftSharp.Graphics;
+﻿using ImGuiNET;
+using MinecraftSharp.Graphics;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
+using Silk.NET.OpenGL.Extensions.ImGui;
 using Silk.NET.Windowing;
 using System.Drawing;
 using System.Numerics;
@@ -15,22 +17,31 @@ internal class Game : IDisposable
     private GL? _gl;
     private Camera? _camera;
     private InputManager? _inputManager;
+    private ImGuiController? _imGuiController;
 
     private ShaderProgram? _blockShader;
     private VertexArrayObject<float, uint>? _blockVao;
     private Texture2D? _blockDiffuseMap;
     private Texture2D? _blockSpecularMap;
     private float _blockShininess = 32;
-    
+
+    // generate array of block coordinates for a 10x10x1 flat plane of blocks centered at the origin
+    private Vector3[] _blockCoordinates =
+        [.. Enumerable.Range(-4, 9)
+            .SelectMany(x => Enumerable.Range(-4, 9)
+            .Select(z => new Vector3(x, 0, z)))];
+
     private ShaderProgram? _sunShader;
     private VertexArrayObject<float, uint>? _sunVao;
     private Vector3 _sunOrbit = new(10, 10, 0);
     private float _sunOrbitSpeed = 0.2f;
-    private Color _sunAmbient = Color.FromArgb(255, 51, 51, 51);
-    private Color _sunDiffuse = Color.FromArgb(255, 128, 128, 128);
-    private Color _sunSpecular = Color.FromArgb(255, 255, 255, 255);
+    private float _sunAngle = 0f;
+    private Vector4 _sunAmbient = new(51 / 255f, 51 / 255f, 51 / 255f, 1);
+    private Vector4 _sunDiffuse = new(128 / 255f, 128 / 255f, 128 / 255f, 1);
+    private Vector4 _sunSpecular = new(255 / 255f, 255 / 255f, 255 / 255f, 1);
     
-    private Color _backgroundColor = Color.Black;
+    private Vector3 _backgroundColor = new(Color.CornflowerBlue.R / 255f, Color.CornflowerBlue.G / 255f, Color.CornflowerBlue.B / 255f);
+    private bool _disposed;
 
     public Game(WindowOptions options)
     {
@@ -41,21 +52,34 @@ internal class Game : IDisposable
         _window.Render += OnRender;
         _window.FramebufferResize += OnFramebufferResize;
         _window.Closing += OnClose;
-        _window.FocusChanged += isFocused => _isWindowFocused = isFocused;
+        _window.FocusChanged += OnFocusChanged;
     }
 
     public void Run()
     {
-        _window.Run();
-
-        _window.Dispose();
+        try
+        {
+            _window.Run();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred: {ex}");
+        }
+        finally
+        {
+            _window.Dispose();
+        }
     }
 
     private void OnLoad()
     {
         _gl = _window.CreateOpenGL();
+        _camera = new(new(0, 0, 5), _window.Size.X / (float)_window.Size.Y);
+        IInputContext input = _window.CreateInput();
+        _inputManager = new(input, _window, _camera!);
+        _imGuiController = new(_gl, _window, input);
 
-        _gl.ClearColor(_backgroundColor);
+        _gl.ClearColor(_backgroundColor.X, _backgroundColor.Y, _backgroundColor.Z, 1);
         _gl.Enable(EnableCap.DepthTest);
 
         float[] vertices =
@@ -127,9 +151,6 @@ internal class Game : IDisposable
         _sunVao = new(_gl, vbo, ebo);
         _sunVao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 8, 0); // positions
 
-        _camera = new(new(0, 0, 5), _window.Size.X / (float)_window.Size.Y);
-        _inputManager = new(_window.CreateInput(), _window, _camera!);
-
         _blockShader = new(_gl, File.ReadAllText(Path.Combine("Content", "simple_block_shader_vertex.glsl")), File.ReadAllText(Path.Combine("Content", "simple_block_shader_fragment.glsl")));
         _sunShader = new(_gl, File.ReadAllText(Path.Combine("Content", "simple_sun_shader_vertex.glsl")), File.ReadAllText(Path.Combine("Content", "simple_sun_shader_fragment.glsl")));
         
@@ -139,18 +160,18 @@ internal class Game : IDisposable
 
     private void OnRender(double deltaTime)
     {
-        _gl!.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        _imGuiController?.Update((float)deltaTime);
 
-        float totalElapsedSeconds = (float)_window.Time;
+        _gl?.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
         Matrix4x4 view = _camera!.ViewMatrix;
         Matrix4x4 projection = _camera!.ProjectionMatrix;
 
         // get uniforms for sun
-        float sunAngle = totalElapsedSeconds * _sunOrbitSpeed;
+        _sunAngle += (float)deltaTime * _sunOrbitSpeed;
         Vector3 sunPosition = new(
-            _sunOrbit.X * MathF.Sin(sunAngle), // X: east-west
-            _sunOrbit.Y * MathF.Cos(sunAngle), // Y: height in sky
+            _sunOrbit.X * MathF.Sin(_sunAngle), // X: east-west
+            _sunOrbit.Y * MathF.Cos(_sunAngle), // Y: height in sky
             0f                                 // Z: no tilt
         );
         Vector3 sunDirection = Vector3.Normalize(-sunPosition);
@@ -163,20 +184,10 @@ internal class Game : IDisposable
         _sunShader.SetUniform("color", _sunSpecular);
         _sunVao!.Draw();
 
-        // get uniforms for block
-        Matrix4x4 blockModel = Matrix4x4.Identity;
-        Matrix4x4 blockMvp = blockModel * view * projection;
-        Matrix4x4.Invert(Matrix4x4.Transpose(blockModel), out Matrix4x4 transInvModel);
-        //Matrix4x4.Invert(blockModel, out Matrix4x4 transInvModel2);
-        //transInvModel2 = Matrix4x4.Transpose(transInvModel2);
-
         // draw block
         _blockDiffuseMap!.Use();
         _blockSpecularMap!.Use();
         _blockShader!.Use();
-        _blockShader.SetUniform("modelMatrix", blockModel);
-        _blockShader.SetUniform("transInvModelMatrix", transInvModel);
-        _blockShader.SetUniform("mvpMatrix", blockMvp);
         _blockShader.SetUniform("material.diffuse", 0); // texture slot 0
         _blockShader.SetUniform("material.specular", 1); // texture slot 1
         _blockShader.SetUniform("material.shininess", _blockShininess);
@@ -185,7 +196,27 @@ internal class Game : IDisposable
         _blockShader.SetUniform("sun.diffuse", _sunDiffuse);
         _blockShader.SetUniform("sun.specular", _sunSpecular);
         _blockShader.SetUniform("viewPosition", _camera.Position);
-        _blockVao!.Draw();
+
+        foreach (Vector3 coordinates in _blockCoordinates)
+        {
+            // get block-specific uniforms
+            Matrix4x4 blockModel = Matrix4x4.CreateTranslation(coordinates);
+            Matrix4x4 blockMvp = blockModel * view * projection;
+            Matrix4x4.Invert(Matrix4x4.Transpose(blockModel), out Matrix4x4 transInvModel);
+            //Matrix4x4.Invert(blockModel, out Matrix4x4 transInvModel);
+            //transInvModel = Matrix4x4.Transpose(transInvModel);
+
+            _blockShader.SetUniform("modelMatrix", blockModel);
+            _blockShader.SetUniform("transInvModelMatrix", transInvModel);
+            _blockShader.SetUniform("mvpMatrix", blockMvp);
+            
+            _blockVao!.Draw();
+        }
+
+        ImGui.ShowDemoWindow();
+        ShowDebugMenu();
+
+        _imGuiController?.Render();
     }
 
     private void OnUpdate(double deltaTime)
@@ -193,22 +224,91 @@ internal class Game : IDisposable
         if (!_isWindowFocused)
             return;
 
-        _inputManager!.OnUpdate((float)deltaTime);
+        _inputManager?.Update((float)deltaTime);
     }
 
     private void OnFramebufferResize(Vector2D<int> newSize)
     {
-        _gl!.Viewport(newSize);
-        _camera!.AspectRatio = newSize.X / (float)newSize.Y;
+        _gl?.Viewport(newSize);
+
+        if (_camera is not null)
+            _camera.AspectRatio = newSize.X / (float)newSize.Y;
+    }
+
+    private void OnFocusChanged(bool focused)
+    {
+        _isWindowFocused = focused;
     }
 
     private void OnClose() => Dispose();
 
+    private void ShowDebugMenu()
+    {
+        if (!ImGui.Begin("Debug Menu"))
+        {
+            ImGui.End();
+            return;
+        }
+
+        const float MinShininess = 0, MaxShininess = 100;
+        if (ImGui.CollapsingHeader("Block"))
+        {
+            ImGui.SliderFloat("Shininess", ref _blockShininess, MinShininess, MaxShininess);
+        }
+
+        if (ImGui.CollapsingHeader("Sun"))
+        {
+            ImGui.SliderFloat3("Orbit", ref _sunOrbit, -20f, 20f);
+            ImGui.SliderFloat("Orbit Speed", ref _sunOrbitSpeed, 0f, 1f);
+            ImGui.ColorEdit4("Ambient Color", ref _sunAmbient);
+            ImGui.ColorEdit4("Diffuse Color", ref _sunDiffuse);
+            ImGui.ColorEdit4("Specular Color", ref _sunSpecular);
+        }
+
+        if (ImGui.CollapsingHeader("Camera"))
+        {
+            ImGui.Text($"Position: {_camera?.Position}");
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                _window.Load -= OnLoad;
+                _window.Update -= OnUpdate;
+                _window.Render -= OnRender;
+                _window.FramebufferResize -= OnFramebufferResize;
+                _window.Closing -= OnClose;
+                _window.FocusChanged -= OnFocusChanged;
+
+                _imGuiController?.Dispose();
+                _inputManager?.Dispose();
+                _blockVao?.Dispose();
+                _sunVao?.Dispose();
+                _blockShader?.Dispose();
+                _sunShader?.Dispose();
+            }
+
+            // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+            // TODO: set large fields to null
+            _disposed = true;
+        }
+    }
+
+    // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+    // ~Game()
+    // {
+    //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+    //     Dispose(disposing: false);
+    // }
+
     public void Dispose()
     {
-        _blockVao?.Dispose();
-        _sunVao?.Dispose();
-        _blockShader?.Dispose();
-        _sunShader?.Dispose();
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

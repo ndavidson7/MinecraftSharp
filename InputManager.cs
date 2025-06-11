@@ -5,23 +5,26 @@ using System.Numerics;
 
 namespace MinecraftSharp;
 
-internal class InputManager
+internal class InputManager : IDisposable
 {
     private readonly IWindow _window;
+    private readonly IInputContext _inputContext;
     private readonly IKeyboard? _keyboard;
     private readonly Camera _camera;
-    private Vector2 _lastMousePosition;
+    private Vector2? _lastMousePosition;
+    private bool _disposed;
 
     public InputManager(IInputContext input, IWindow window, Camera camera)
     {
+        _inputContext = input;
+        _window = window;
+        _camera = camera;
+
         if (input.Keyboards.Count > 0)
         {
             _keyboard = input.Keyboards[0];
             _keyboard.KeyDown += OnKeyDown;
         }
-
-        _camera = camera;
-        _window = window;
 
         foreach (IMouse mouse in input.Mice)
         {
@@ -32,7 +35,7 @@ internal class InputManager
         }
     }
 
-    public void OnUpdate(float deltaTime)
+    public void Update(float deltaTime)
     {
         if (_keyboard is null)
             return;
@@ -69,13 +72,13 @@ internal class InputManager
 
     private void OnMouseMove(IMouse mouse, Vector2 position)
     {
-        if (_lastMousePosition == default)
+        if (_lastMousePosition is null)
         {
             _lastMousePosition = position;
             return;
         }
 
-        Vector2 delta = position - _lastMousePosition;
+        Vector2 delta = position - _lastMousePosition!.Value;
         _lastMousePosition = position;
 
         _camera.Yaw += Angle<float>.FromDegrees(delta.X * _camera.Sensitivity);
@@ -96,6 +99,71 @@ internal class InputManager
     private void OnKeyDown(IKeyboard keyboard, Key key, int arg3)
     {
         if (key == Key.Escape)
-            _window.Close();
+            ToggleCursor();
+    }
+
+    private void ToggleCursor()
+    {
+        _lastMousePosition = default; // reset the last mouse position to avoid sudden jumps
+
+        foreach (IMouse mouse in _inputContext.Mice)
+        {
+            // toggle the cursor mode
+            mouse.Cursor.CursorMode = mouse.Cursor.CursorMode == CursorMode.Normal
+                ? CursorMode.Raw
+                : CursorMode.Normal;
+
+            mouse.Position = (Vector2)_window.Size / 2; // center the cursor in the window
+
+            // add or remove the event handlers
+            if (mouse.Cursor.CursorMode == CursorMode.Raw)
+            {
+                mouse.MouseMove += OnMouseMove;
+                mouse.Scroll += OnMouseWheel;
+            }
+            else
+            {
+                mouse.MouseMove -= OnMouseMove;
+                mouse.Scroll -= OnMouseWheel;
+            }
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                if (_keyboard is not null)
+                    _keyboard.KeyDown -= OnKeyDown;
+
+                foreach (IMouse mouse in _inputContext.Mice)
+                {
+                    mouse.MouseMove -= OnMouseMove;
+                    mouse.Scroll -= OnMouseWheel;
+                }
+
+                _inputContext?.Dispose();
+            }
+
+            // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+            // TODO: set large fields to null
+            _disposed = true;
+        }
+    }
+
+    // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+    // ~InputManager()
+    // {
+    //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+    //     Dispose(disposing: false);
+    // }
+
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }
