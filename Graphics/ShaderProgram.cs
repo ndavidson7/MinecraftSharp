@@ -4,17 +4,12 @@ using System.Numerics;
 
 namespace MinecraftSharp.Graphics;
 
-internal class ShaderProgram : IDisposable
+internal class ShaderProgram : OpenGLObject
 {
-    private readonly GL _gl;
-    private readonly uint _handle;
     private readonly Dictionary<string, int> _uniformLocations;
-    private bool _disposed;
 
-    public ShaderProgram(GL gl, string vertexShaderSource, string fragmentShaderSource)
+    public ShaderProgram(GL gl, string vertexShaderSource, string fragmentShaderSource) : base(gl, gl.CreateProgram())
     {
-        _gl = gl;
-
         // TODO: If the need to reuse a vertex or fragment shader between multiple shader programs
         // ever arises, create IDisposable shader class(es), convert the following lines to
         // `using (Shader vert/frag = new(...)) { ... }`, and then make a separate ShaderProgram
@@ -25,7 +20,6 @@ internal class ShaderProgram : IDisposable
         uint fragmentShaderId = _gl.CreateShader(ShaderType.FragmentShader);
         CompileShader(fragmentShaderId, fragmentShaderSource);
 
-        _handle = _gl.CreateProgram();
         _gl.AttachShader(_handle, vertexShaderId);
         _gl.AttachShader(_handle, fragmentShaderId);
 
@@ -116,28 +110,5 @@ internal class ShaderProgram : IDisposable
         }
     }
 
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!_disposed)
-        {
-            if (disposing)
-            {
-                _gl.DeleteProgram(_handle);
-            }
-
-            _disposed = true;
-        }
-    }
-
-    ~ShaderProgram()
-    {
-        if (!_disposed)
-            Console.WriteLine("GPU Resource leak! Did you forget to call Dispose()?");
-    }
-
-    public void Dispose()
-    {
-        Dispose(disposing: true);
-        GC.SuppressFinalize(this);
-    }
+    protected override void DisposeManaged() => _gl.DeleteProgram(_handle);
 }

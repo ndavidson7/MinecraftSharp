@@ -2,22 +2,16 @@
 
 namespace MinecraftSharp.Graphics;
 
-internal class BufferObject<T> : IDisposable where T : unmanaged
+internal class BufferObject<T> : OpenGLObject where T : unmanaged
 {
-    private readonly GL _gl;
-    private readonly uint _handle;
-    private bool _disposed;
-
     public BufferTargetARB Type { get; init; }
     
     public BufferUsageARB Usage { get; init; }
 
     public uint Length { get; private set; }
 
-    public BufferObject(GL gl, BufferTargetARB type, BufferUsageARB usage)
+    public BufferObject(GL gl, BufferTargetARB type, BufferUsageARB usage) : base(gl, gl.GenBuffer())
     {
-        _gl = gl;
-        _handle = _gl.GenBuffer();
         Type = type;
         Usage = usage;
     }
@@ -36,28 +30,5 @@ internal class BufferObject<T> : IDisposable where T : unmanaged
         Length = (uint) data.Length;
     }
 
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!_disposed)
-        {
-            if (disposing)
-            {
-                _gl.DeleteBuffer(_handle);
-            }
-
-            _disposed = true;
-        }
-    }
-
-    ~BufferObject()
-    {
-        if (!_disposed)
-            Console.WriteLine("GPU Resource leak! Did you forget to call Dispose()?");
-    }
-
-    public void Dispose()
-    {
-        Dispose(disposing: true);
-        GC.SuppressFinalize(this);
-    }
+    protected override void DisposeManaged() => _gl.DeleteBuffer(_handle);
 }

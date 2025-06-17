@@ -1,27 +1,36 @@
 ﻿using Silk.NET.Assimp;
 using Silk.NET.OpenGL;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace MinecraftSharp.Graphics;
 
-internal class Texture2D : IDisposable
+internal class Texture2D : OpenGLObject
 {
     private const TextureTarget Target = TextureTarget.Texture2D;
 
-    private readonly GL _gl;
-    private readonly uint _handle;
+    private static readonly DecoderOptions DecoderOptions;
 
-    public Texture2D(GL gl, string path, TextureUnit slot = TextureUnit.Texture0, TextureType type = TextureType.None)
+    static Texture2D()
     {
-        _gl = gl;
-        _handle = _gl.GenTexture();
+        Configuration configuration = Configuration.Default.Clone();
+        configuration.PreferContiguousImageBuffers = true;
+        DecoderOptions = new DecoderOptions
+        {
+            Configuration = configuration,
+        };
+    }
+
+    public Texture2D(GL gl, string path, TextureUnit slot = TextureUnit.Texture0, TextureType type = TextureType.None) : base(gl, gl.GenTexture())
+    {
         Slot = slot;
         Type = type;
 
         Bind();
 
-        LoadImage(path);
+        LoadImage(gl, path);
 
         SetParameters();
     }
@@ -40,31 +49,27 @@ internal class Texture2D : IDisposable
         Bind();
     }
 
-    public void Dispose() => _gl.DeleteTexture(_handle);
+    protected override void DisposeManaged() => _gl.DeleteTexture(_handle);
 
     private void SetParameters()
     {
         _gl.TexParameter(Target, TextureParameterName.TextureWrapS, (int)GLEnum.ClampToEdge);
         _gl.TexParameter(Target, TextureParameterName.TextureWrapT, (int)GLEnum.ClampToEdge);
-        _gl.TexParameter(Target, TextureParameterName.TextureMinFilter, (int)GLEnum.LinearMipmapLinear);
-        _gl.TexParameter(Target, TextureParameterName.TextureMagFilter, (int)GLEnum.Linear);
+        _gl.TexParameter(Target, TextureParameterName.TextureMinFilter, (int)GLEnum.NearestMipmapNearest);
+        _gl.TexParameter(Target, TextureParameterName.TextureMagFilter, (int)GLEnum.Nearest);
         _gl.TexParameter(Target, TextureParameterName.TextureBaseLevel, 0);
         _gl.TexParameter(Target, TextureParameterName.TextureMaxLevel, 8);
         _gl.GenerateMipmap(Target);
     }
 
-    private unsafe void LoadImage(string path)
+    private static unsafe void LoadImage(GL gl, string path)
     {
-        using Image<Rgba32> image = Image.Load<Rgba32>(path);
-        _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)image.Width, (uint)image.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
+        using Image<Rgba32> image = Image.Load<Rgba32>(DecoderOptions, path);
+        image.Mutate(x => x.Flip(FlipMode.Vertical)); // OpenGL expects the origin at the bottom-left
 
-        image.ProcessPixelRows(accessor =>
-        {
-            for (int y = 0; y < accessor.Height; y++)
-            {
-                ReadOnlySpan<Rgba32> pixelRow = accessor.GetRowSpan(y);
-                _gl.TexSubImage2D(TextureTarget.Texture2D, 0, 0, y, (uint)accessor.Width, 1, PixelFormat.Rgba, PixelType.UnsignedByte, pixelRow);
-            }
-        });
+        if (!image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> memory))
+            throw new InvalidOperationException("Could not get single image buffer pointer. Image is too large or PreferContiguousImageBuffers is set to false.");
+
+        gl.TexImage2D<Rgba32>(Target, 0, InternalFormat.Rgba8, (uint)image.Width, (uint)image.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, memory.Span);
     }
 }
