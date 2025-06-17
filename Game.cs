@@ -7,6 +7,7 @@ using Silk.NET.OpenGL.Extensions.ImGui;
 using Silk.NET.Windowing;
 using System.Drawing;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace MinecraftSharp;
 
@@ -18,6 +19,8 @@ internal class Game : IDisposable
     private Camera? _camera;
     private InputManager? _inputManager;
     private ImGuiController? _imGuiController;
+
+    private string? _openGlVersion;
 
     private ShaderProgram? _blockShader;
     private Mesh<Vertex, uint>? _blockMesh;
@@ -75,13 +78,15 @@ internal class Game : IDisposable
         }
     }
 
-    private void OnLoad()
+    private unsafe void OnLoad()
     {
         _gl = _window.CreateOpenGL();
         _camera = new(new(0, 0, 5), _window.Size.X / (float)_window.Size.Y);
         IInputContext input = _window.CreateInput();
         _inputManager = new(input, _window, _camera!);
         _imGuiController = new(_gl, _window, input);
+
+        _openGlVersion = Marshal.PtrToStringAnsi((nint)_gl.GetString(StringName.Version)) ?? "Unknown";
 
         _gl.ClearColor(_backgroundColor.X, _backgroundColor.Y, _backgroundColor.Z, 1);
         _gl.Enable(EnableCap.DepthTest);
@@ -279,6 +284,7 @@ internal class Game : IDisposable
 
         if (ImGui.CollapsingHeader("Rendering"))
         {
+            ImGui.Text($"OpenGL Version: {_openGlVersion}");
             ImGui.Text($"Viewport Size: {_window.Size}");
             ImGui.Text($"FPS: {Math.Round(1 / deltaTime)}");
             ImGui.Checkbox("Wireframe Mode", ref _wireframeMode);

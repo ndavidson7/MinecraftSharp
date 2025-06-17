@@ -13,7 +13,7 @@ internal class Program
             Size = new Vector2D<int>(1920, 1080),
             Title = "MinecraftSharp",
 #if DEBUG
-            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Debug, new APIVersion(4, 1)),
+            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Debug | ContextFlags.ForwardCompatible, new APIVersion(4, 1)),
 #else
             API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1)),
 #endif
