@@ -29,7 +29,7 @@ internal class InputManager : IDisposable
         foreach (IMouse mouse in input.Mice)
         {
             mouse.Cursor.IsConfined = true;
-            mouse.Cursor.CursorMode = CursorMode.Raw;
+            mouse.Cursor.CursorMode = mouse.Cursor.IsSupported(CursorMode.Raw) ? CursorMode.Raw : CursorMode.Disabled;
             mouse.MouseMove += OnMouseMove;
             mouse.Scroll += OnMouseWheel;
         }
@@ -104,19 +104,19 @@ internal class InputManager : IDisposable
 
     private void ToggleCursor()
     {
-        _lastMousePosition = default; // reset the last mouse position to avoid sudden jumps
+        _lastMousePosition = null; // reset the last mouse position to avoid sudden jumps
 
         foreach (IMouse mouse in _inputContext.Mice)
         {
             // toggle the cursor mode
             mouse.Cursor.CursorMode = mouse.Cursor.CursorMode == CursorMode.Normal
-                ? CursorMode.Raw
+                ? mouse.Cursor.IsSupported(CursorMode.Raw) ? CursorMode.Raw : CursorMode.Disabled
                 : CursorMode.Normal;
 
             mouse.Position = (Vector2)_window.Size / 2; // center the cursor in the window
 
             // add or remove the event handlers
-            if (mouse.Cursor.CursorMode == CursorMode.Raw)
+            if (mouse.Cursor.CursorMode != CursorMode.Normal)
             {
                 mouse.MouseMove += OnMouseMove;
                 mouse.Scroll += OnMouseWheel;
