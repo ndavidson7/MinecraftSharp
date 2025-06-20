@@ -68,10 +68,6 @@ internal class Game : IDisposable
         {
             _window.Run();
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"An error occurred: {ex}");
-        }
         finally
         {
             _window.Dispose();
@@ -232,11 +228,12 @@ internal class Game : IDisposable
 
         _inputManager?.Update((float)deltaTime);
 
-        if (!_isFpsCapped && _window.FramesPerSecond != 0)
-            _window.FramesPerSecond = 0;
-
-        if (_isFpsCapped && _targetFps != _window.FramesPerSecond)
-            _window.FramesPerSecond = _targetFps;
+        _window.FramesPerSecond = _isFpsCapped switch
+        {
+            false when _window.FramesPerSecond != 0 => 0,
+            true when _targetFps != _window.FramesPerSecond => _targetFps,
+            _ => _window.FramesPerSecond
+        };
     }
 
     private void OnFramebufferResize(Vector2D<int> newSize)

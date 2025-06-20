@@ -22,7 +22,14 @@ internal class Program
             VSync = false,
         };
 
-        using Game game = new(options);
-        game.Run();
+        try
+        {
+            using Game game = new(options);
+            game.Run();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred: {ex}");
+        }
     }
 }
