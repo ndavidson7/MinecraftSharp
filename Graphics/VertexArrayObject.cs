@@ -29,7 +29,7 @@ internal class VertexArrayObject<TVertex, TIndex> : OpenGLObject
 
     public void Unbind() => _gl.BindVertexArray(0);
 
-    public unsafe void AddVertexAttribute(uint index, int size, VertexAttribPointerType type, bool normalized, uint stride, int offset)
+    public void AddVertexAttribute(uint index, int size, VertexAttribPointerType type, bool normalized, uint stride, int offset)
     {
         Bind();
         _gl.VertexAttribPointer(index, size, type, normalized, stride, offset);

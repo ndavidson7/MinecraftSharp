@@ -8,6 +8,7 @@ using Silk.NET.Windowing;
 using System.Drawing;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using MinecraftSharp.Graphics.Textures;
 
 namespace MinecraftSharp;
 
@@ -40,9 +41,10 @@ internal class Game : IDisposable
     private Vector4 _sunAmbient = new(51 / 255f, 51 / 255f, 51 / 255f, 1);
     private Vector4 _sunDiffuse = new(128 / 255f, 128 / 255f, 128 / 255f, 1);
     private Vector4 _sunSpecular = new(255 / 255f, 255 / 255f, 255 / 255f, 1);
-    
-    private Vector3 _backgroundColor = new(Color.CornflowerBlue.R / 255f, Color.CornflowerBlue.G / 255f, Color.CornflowerBlue.B / 255f);
 
+    private Mesh<float, uint>? _skyboxMesh;
+    private ShaderProgram? _skyboxShader;
+    
     private bool _wireframeMode;
 
     private bool _isFpsCapped = true;
@@ -68,6 +70,11 @@ internal class Game : IDisposable
         {
             _window.Run();
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception occurred during game execution: {ex}");
+            throw;
+        }
         finally
         {
             _window.Dispose();
@@ -84,7 +91,6 @@ internal class Game : IDisposable
 
         _openGlVersion = Marshal.PtrToStringAnsi((nint)_gl.GetString(StringName.Version)) ?? "Unknown";
 
-        _gl.ClearColor(_backgroundColor.X, _backgroundColor.Y, _backgroundColor.Z, 1);
         _gl.Enable(EnableCap.DepthTest);
         _gl.Enable(EnableCap.CullFace);
 
@@ -153,10 +159,59 @@ internal class Game : IDisposable
         ];
 
         _blockMesh = new(_gl, vbo, ebo, textures);
-        _blockShader = new(_gl, File.ReadAllText(Path.Combine("Content", "simple_block_shader_vertex.glsl")), File.ReadAllText(Path.Combine("Content", "simple_block_shader_fragment.glsl")));
-
+        _blockShader = new(_gl, File.ReadAllText(Path.Combine("Content", "Shaders", "simple_block_shader_vertex.glsl")), File.ReadAllText(Path.Combine("Content", "Shaders", "simple_block_shader_fragment.glsl")));
+        _blockShader.SetUniform("material.diffuse", 0); // texture slot 0
+        _blockShader.SetUniform("material.specular", 1); // texture slot 1
+        
         _sunVao = new(_gl, vbo, ebo);
-        _sunShader = new(_gl, File.ReadAllText(Path.Combine("Content", "simple_sun_shader_vertex.glsl")), File.ReadAllText(Path.Combine("Content", "simple_sun_shader_fragment.glsl")));
+        _sunShader = new(_gl, File.ReadAllText(Path.Combine("Content", "Shaders", "simple_sun_shader_vertex.glsl")), File.ReadAllText(Path.Combine("Content", "Shaders", "simple_sun_shader_fragment.glsl")));
+
+        float[] skyboxVertices =
+        [
+            -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,
+             1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
+             1.0f, -1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,
+        ];
+
+        uint[] skyboxIndices =
+        [
+            // Back face (viewed from inside)
+            0, 1, 2, 0, 2, 3,
+            // Front face (viewed from inside)
+            4, 6, 5, 4, 7, 6,
+            // Left face
+            4, 5, 1, 1, 0, 4,
+            // Right face
+            3, 2, 6, 6, 7, 3,
+            // Top face
+            4, 0, 3, 3, 7, 4,
+            // Bottom face
+            1, 5, 6, 6, 2, 1
+        ];
+
+        TextureCubemap skyboxTexture = new(_gl, 
+        [
+                Path.Combine("Content", "Textures", "skybox2", "right.jpg"),
+                Path.Combine("Content", "Textures", "skybox2", "left.jpg"),
+                Path.Combine("Content", "Textures", "skybox2", "top.jpg"),
+                Path.Combine("Content", "Textures", "skybox2", "bottom.jpg"),
+                Path.Combine("Content", "Textures", "skybox2", "front.jpg"),
+                Path.Combine("Content", "Textures", "skybox2", "back.jpg")
+            ]);
+
+        _skyboxMesh = new(_gl, skyboxVertices, skyboxIndices, [skyboxTexture], vao =>
+        {
+            vao.AddVertexAttribute(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
+        });
+            
+        _skyboxShader = new(_gl, File.ReadAllText(Path.Combine("Content", "Shaders", "skybox_vertex.glsl")),
+            File.ReadAllText(Path.Combine("Content", "Shaders", "skybox_fragment.glsl")));
+        _skyboxShader.SetUniform("skybox", 0);
         
         _window.Center();
         _window.IsVisible = true;
@@ -214,6 +269,16 @@ internal class Game : IDisposable
             
             _blockMesh?.Draw(_blockShader);
         }
+        
+        // draw skybox
+        _gl.DepthFunc(DepthFunction.Lequal);
+        _skyboxShader!.Use();
+        Matrix4x4 skyboxView = view with { M41 = 0, M42 = 0, M43 = 0 };
+        _skyboxShader.SetUniform("view", skyboxView);
+        _skyboxShader.SetUniform("projection", projection);
+        _skyboxMesh?.Draw(_skyboxShader);
+        // reset depth function
+        _gl.DepthFunc(DepthFunction.Less);
 
         ImGui.ShowDemoWindow();
         ShowDebugMenu(deltaTime);
