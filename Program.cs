@@ -20,6 +20,7 @@ internal class Program
             IsVisible = false,
             FramesPerSecond = 60,
             VSync = false,
+            Samples = 4, // Enable 4x MSAA
         };
 
         try

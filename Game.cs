@@ -93,6 +93,7 @@ internal class Game : IDisposable
 
         _gl.Enable(EnableCap.DepthTest);
         _gl.Enable(EnableCap.CullFace);
+        _gl.Enable(EnableCap.Multisample);
 
         Vertex[] vertices =
         [
