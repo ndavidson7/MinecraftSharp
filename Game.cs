@@ -1,14 +1,14 @@
 ﻿using ImGuiNET;
 using MinecraftSharp.Graphics;
+using MinecraftSharp.Graphics.Textures;
+using Serilog;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.OpenGL.Extensions.ImGui;
 using Silk.NET.Windowing;
-using System.Drawing;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using MinecraftSharp.Graphics.Textures;
 
 namespace MinecraftSharp;
 
@@ -70,11 +70,6 @@ internal class Game : IDisposable
         {
             _window.Run();
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Exception occurred during game execution: {ex}");
-            throw;
-        }
         finally
         {
             _window.Dispose();
@@ -90,6 +85,14 @@ internal class Game : IDisposable
         _imGuiController = new(_gl, _window, input);
 
         _openGlVersion = Marshal.PtrToStringAnsi((nint)_gl.GetString(StringName.Version)) ?? "Unknown";
+
+        if ((_gl.GetInteger(GetPName.ContextFlags) & (int)GLEnum.ContextFlagDebugBit) != 0)
+        {
+            _gl.Enable(EnableCap.DebugOutput);
+            _gl.Enable(EnableCap.DebugOutputSynchronous);
+            _gl.DebugMessageCallback(LogDebugOutput, null);
+            _gl.DebugMessageControl(DebugSource.DontCare, DebugType.DontCare, DebugSeverity.DontCare, [], true);
+        }
 
         _gl.Enable(EnableCap.DepthTest);
         _gl.Enable(EnableCap.CullFace);
@@ -363,6 +366,48 @@ internal class Game : IDisposable
             if (!_isFpsCapped)
                 ImGui.EndDisabled();
         }
+    }
+
+    private void LogDebugOutput(GLEnum source, GLEnum type, int id, GLEnum severity, int length, nint message, nint userParam)
+    {
+        string sourceString = source switch
+        {
+            GLEnum.DebugSourceApi => "API",
+            GLEnum.DebugSourceWindowSystem => "Window System",
+            GLEnum.DebugSourceShaderCompiler => "Shader Compiler",
+            GLEnum.DebugSourceThirdParty => "Third Party",
+            GLEnum.DebugSourceApplication => "Application",
+            GLEnum.DebugSourceOther => "Other",
+            _ => "Unknown"
+        };
+
+        string typeString = type switch
+        {
+            GLEnum.DebugTypeError => "Error",
+            GLEnum.DebugTypeDeprecatedBehavior => "Deprecated Behavior",
+            GLEnum.DebugTypeUndefinedBehavior => "Undefined Behavior",
+            GLEnum.DebugTypePortability => "Portability",
+            GLEnum.DebugTypePerformance => "Performance",
+            GLEnum.DebugTypeMarker => "Marker",
+            GLEnum.DebugTypePushGroup => "Push Group",
+            GLEnum.DebugTypePopGroup => "Pop Group",
+            GLEnum.DebugTypeOther => "Other",
+            _ => "Unknown"
+        };
+
+        string severityString = severity switch
+        {
+            GLEnum.DebugSeverityHigh => "High",
+            GLEnum.DebugSeverityMedium => "Medium",
+            GLEnum.DebugSeverityLow => "Low",
+            GLEnum.DebugSeverityNotification => "Notification",
+            _ => "Unknown"
+        };
+
+        string messageString = Marshal.PtrToStringAnsi(message) ?? "";
+
+        Log.Debug("OpenGL Debug Message: {Source}, {Type}, {ID}, {Severity}, {Message}", 
+            sourceString, typeString, id, severityString, messageString);
     }
 
     protected virtual void Dispose(bool disposing)

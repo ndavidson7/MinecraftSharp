@@ -1,5 +1,7 @@
-﻿using Silk.NET.Maths;
+﻿using Serilog;
+using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using System.Diagnostics;
 
 namespace MinecraftSharp;
 
@@ -25,12 +27,29 @@ internal class Program
 
         try
         {
+            Log.Logger = new LoggerConfiguration()
+                .WriteTo.File("logs/minecraftsharp.log", rollingInterval: RollingInterval.Day)
+                .CreateLogger();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to initialize logging: {ex}");
+            return;
+        }
+
+        try
+        {
+            Log.Information("Creating window");
+            
             using Game game = new(options);
+
+            Log.Information("Starting game");
+
             game.Run();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"An error occurred: {ex}");
+            Log.Fatal(ex, "A fatal error occurred");
         }
     }
 }
